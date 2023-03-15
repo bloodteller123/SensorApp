@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Sensor Application</string>
+    <string name="date">Date:Time</string>
+    <string name="activityDesc">activity</string>
+</resources>
