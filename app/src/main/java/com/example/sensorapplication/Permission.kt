@@ -12,7 +12,7 @@ import pub.devrel.easypermissions.AppSettingsDialog
 import pub.devrel.easypermissions.EasyPermissions
 import java.util.*
 
-
+//https://github.com/googlesamples/easypermissions
 class Permission : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {

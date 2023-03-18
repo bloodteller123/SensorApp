@@ -20,6 +20,7 @@ class MusicService : Service(){
         player = MediaPlayer.create(this, R.raw.bg)
         player.isLooping = true
         player.setVolume(1F, 1F)
+        Log.d("Music", "CREATE")
     }
     //Called by the system every time a client explicitly starts the service by calling Context.startService(Intent),
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -28,6 +29,7 @@ class MusicService : Service(){
         return START_STICKY
     }
     override fun onDestroy() {
+        Log.d("Music", "onDestroy")
         player.stop()
         player.release()
     }

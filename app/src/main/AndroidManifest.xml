@@ -35,6 +35,17 @@
                 android:name="android.app.lib_name"
                 android:value="" />
         </activity>
+        <service
+            android:name=".service.MusicService"
+            android:enabled="true" />
+<!--        <receiver-->
+<!--            android:name=".MainActivity$InfoReceiver"-->
+<!--            android:exported="false"-->
+<!--            android:permission="android.permission.ACTIVITY_RECOGNITION">-->
+<!--            <intent-filter>-->
+<!--                <action android:name="action.TRANSITIONS_DATA" />-->
+<!--            </intent-filter>-->
+<!--        </receiver>-->
     </application>
 
 </manifest>

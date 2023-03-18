@@ -10,7 +10,7 @@ data class LogTable(
 //    @PrimaryKey(autoGenerate = true)
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "activityId")
-    val activityId: Int = 1,
+    val activityId: Int = 0,
 
     val day: String,
     val time: String,

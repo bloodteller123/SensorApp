@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -22,9 +23,8 @@ import com.example.sensorapplication.db.Repository
 import com.example.sensorapplication.db.TrackViewModel
 import com.example.sensorapplication.db.TrackViewModelFactory
 import com.example.sensorapplication.service.MusicService
+import com.google.android.gms.common.internal.safeparcel.SafeParcelableSerializer
 import com.google.android.gms.location.*
-import java.text.DateFormat
-import java.text.SimpleDateFormat
 import java.time.LocalDateTime
 import java.util.*
 
@@ -42,12 +42,15 @@ class MainActivity : AppCompatActivity(){
     private val trackViewModel: TrackViewModel by viewModels {
         TrackViewModelFactory(Repository((application as SensorApplication).database.trackDao()))
     }
+    private val TAG: String = "com.example.sensorapplication.broadcast"
+    private lateinit var mInfoReceiver: InfoReceiver
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         Log.d("MainActivity", "here")
         client = ActivityRecognition.getClient(this)
+        mInfoReceiver = InfoReceiver()
         if(!activityRecognitionPermissionApproved()){
             var intent = Intent(this, Permission::class.java)
             startActivity(intent)
@@ -64,7 +67,7 @@ class MainActivity : AppCompatActivity(){
     }
 
     @SuppressLint("MissingPermission")
-    @RequiresApi(Build.VERSION_CODES.Q)
+    @RequiresApi(Build.VERSION_CODES.S)
     override fun onResume() {
         super.onResume()
 
@@ -77,19 +80,27 @@ class MainActivity : AppCompatActivity(){
 
             val request = ActivityTransitionRequest(transitions)
             Log.d("MainActivity", transitions.toString())
+            registerReceiver(mInfoReceiver, IntentFilter(TAG))
 
         if (activityRecognitionPermissionApproved()) {
             client.requestActivityTransitionUpdates(request, getPendingIntent())
                 .addOnSuccessListener {
                     Log.d("MainActivity", "success")
+                    sendFakeActivityTransitionEvent()
                 }
                 .addOnFailureListener {
                     Log.d("MainActivity", "failed")
                 }
         }
+
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(mInfoReceiver)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
     override fun onStop() {
         super.onStop()
         if(PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(
@@ -106,13 +117,56 @@ class MainActivity : AppCompatActivity(){
         Log.d("onStop", "cancel")
     }
 
+    private fun sendFakeActivityTransitionEvent() {
+        Log.d("MainActivity", "sendFeedback")
+        // name your intended recipient class
+        val intent = Intent(TAG)
+
+        var transitionEvent: ActivityTransitionEvent
+        val events: ArrayList<ActivityTransitionEvent> = arrayListOf()
+        transitionEvent = ActivityTransitionEvent(
+            DetectedActivity.STILL,
+            ActivityTransition.ACTIVITY_TRANSITION_ENTER, 10000000000
+        )
+        events.add(transitionEvent)
+        transitionEvent = ActivityTransitionEvent(
+            DetectedActivity.STILL,
+            ActivityTransition.ACTIVITY_TRANSITION_EXIT, 10000000000
+        )
+        events.add(transitionEvent)
+        transitionEvent = ActivityTransitionEvent(
+            DetectedActivity.WALKING,
+            ActivityTransition.ACTIVITY_TRANSITION_ENTER, 10000000000
+        )
+        events.add(transitionEvent)
+        transitionEvent = ActivityTransitionEvent(
+            DetectedActivity.WALKING,
+            ActivityTransition.ACTIVITY_TRANSITION_EXIT, 10000000000
+        )
+        events.add(transitionEvent)
+        transitionEvent = ActivityTransitionEvent(
+            DetectedActivity.RUNNING,
+            ActivityTransition.ACTIVITY_TRANSITION_ENTER, 10000000000
+        )
+        events.add(transitionEvent)
+
+        // finally, serialize and send
+        val result = ActivityTransitionResult(events)
+        SafeParcelableSerializer.serializeToIntentExtra(
+            result,
+            intent,
+            "com.google.android.location.internal.EXTRA_ACTIVITY_TRANSITION_RESULT"
+        )
+        sendBroadcast(intent)
+    }
+
 //https://developer.android.com/reference/android/app/PendingIntent#getBroadcast(android.content.Context,%20int,%20android.content.Intent,%20int)
-    @RequiresApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.S)
     @SuppressLint("UnspecifiedImmutableFlag")
     private fun getPendingIntent(): PendingIntent {
     Log.d("MainActivity", "PendingIntent")
         return PendingIntent.getBroadcast(this, 0,
-            Intent(this, InfoReceiver::class.java),PendingIntent.FLAG_IMMUTABLE)
+            Intent(TAG), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
         }
 
     private fun buildTransitions(){
@@ -159,12 +213,14 @@ class MainActivity : AppCompatActivity(){
         if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_EXIT){
             endTime = System.currentTimeMillis()
             val timeDiff = endTime - startTime
-            val formatter: DateFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
-            val text: String = formatter.format(Date(timeDiff))
+            Log.d("MainActivity", timeDiff.toString())
+
+            val minutes: Long = timeDiff / 1000 / 60
+            val seconds = (timeDiff / 1000 % 60)
             val act: String = getActivity(activity)
-            val str = "You just did $act for $text"
+            val str = "You just did $act for $minutes:$seconds"
             makeToast(str)
-            trackViewModel.insertTrack(LogTable(day = LocalDateTime.now().toString(), time = text, activity = act))
+//            trackViewModel.insertTrack(LogTable(day = LocalDateTime.now().toString(), time = "$minutes:$seconds", activity = act))
         }else{
             startTime = System.currentTimeMillis()
             getActivity(activity)
@@ -202,21 +258,20 @@ class MainActivity : AppCompatActivity(){
         }
         return ""
     }
-
     private fun makeToast(msg:String){
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
     }
-    inner class InfoReceiver: BroadcastReceiver() {
+    inner class InfoReceiver : BroadcastReceiver() {
         @RequiresApi(Build.VERSION_CODES.O)
         override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d("MainActivity", "onReceive")
+            Log.d("MainActivity", "onReceive(): $intent")
             if (ActivityTransitionResult.hasResult(intent)) {
                 val result = intent?.let { ActivityTransitionResult.extractResult(it) }
                 Log.d("MainActivity", "Notnull")
                 if (result != null) {
                     for (event in result.transitionEvents) {
-                        setActivity(event)
-                        activityDesc.text = getActivity(event)
+                        this@MainActivity.setActivity(event)
+                        this@MainActivity.activityDesc.text = this@MainActivity.getActivity(event)
                     }
                 }
             }
