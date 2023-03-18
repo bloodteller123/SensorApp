@@ -12,19 +12,27 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import com.example.sensorapplication.service.MusicService
 import com.google.android.gms.location.*
-import com.google.android.gms.tasks.Task
+import java.text.DateFormat
+import java.text.SimpleDateFormat
+import java.util.*
 
 
 class MainActivity : AppCompatActivity(){
 
     private lateinit var image: ImageView
     private lateinit var activityDesc: TextView
+    private lateinit var encouragingMsg: TextView
     private lateinit var transitions: MutableList<ActivityTransition>
     private lateinit var client: ActivityRecognitionClient
+    private var startTime: Long = 0
+    private var endTime: Long = 0
+    private lateinit var svc: Intent
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,7 +49,10 @@ class MainActivity : AppCompatActivity(){
 
         image = findViewById(R.id.imageView)
         activityDesc = findViewById(R.id.activityDesc)
+        encouragingMsg = findViewById(R.id.msg1)
         buildTransitions()
+
+        svc = Intent(this, MusicService::class.java)
 
         val request = ActivityTransitionRequest(transitions)
 
@@ -123,24 +134,61 @@ class MainActivity : AppCompatActivity(){
     @SuppressLint("SetTextI18n")
     private fun setActivity(activity: ActivityTransitionEvent){
         Log.d("MainActivity", "setActivity")
+        if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_EXIT){
+            endTime = System.currentTimeMillis()
+            val timeDiff = endTime - startTime
+            val formatter: DateFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
+            val text: String = formatter.format(Date(timeDiff))
+            val str = "You just did " + getActivity(activity) + " for " + text
+            makeToast(str)
+        }else{
+            startTime = System.currentTimeMillis()
+            getActivity(activity)
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun getActivity(activity: ActivityTransitionEvent): String{
+        encouragingMsg.text = ""
         when(activity.activityType){
             DetectedActivity.STILL -> {
-                activityDesc.text = "STILL"
-                image.setImageResource(R.drawable.still)
+//                activityDesc.text =
+                if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER) image.setImageResource(R.drawable.still)
+                return "STILL"
             }
             DetectedActivity.WALKING -> {
-                activityDesc.text = "WALKING"
-                image.setImageResource(R.drawable.walking)
+//                activityDesc.text = ""
+//                image.setImageResource(R.drawable.walking)
+                if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER){
+                    image.setImageResource(R.drawable.walking)
+                    encouragingMsg.text = "You are doing great!"
+                }
+                return "WALKING"
             }
             DetectedActivity.IN_VEHICLE -> {
-                activityDesc.text = "IN_VEHICLE"
-                image.setImageResource(R.drawable.driving)
+//                activityDesc.text = "IN_VEHICLE"
+//                image.setImageResource(R.drawable.driving)
+                if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER) image.setImageResource(R.drawable.driving)
+                return "IN_VEHICLE"
             }
             DetectedActivity.RUNNING -> {
-                activityDesc.text = "RUNNING"
-                image.setImageResource(R.drawable.running)
+//                activityDesc.text = "RUNNING"
+//                image.setImageResource(R.drawable.running)
+                    if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER){
+
+                        startService(svc)
+                        image.setImageResource(R.drawable.running)
+                    }else{
+                        stopService(svc)
+                    }
+                    return "RUNNING"
             }
         }
+        return ""
+    }
+
+    private fun makeToast(msg:String){
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
     }
 
     inner class InfoReceiver: BroadcastReceiver() {
@@ -152,6 +200,7 @@ class MainActivity : AppCompatActivity(){
                 if (result != null) {
                     for (event in result.transitionEvents) {
                         setActivity(event)
+                        activityDesc.text = getActivity(event)
                     }
                 }
             }
