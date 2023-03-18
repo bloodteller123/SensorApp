@@ -8,10 +8,12 @@ import android.util.Log
 import android.widget.Button
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
+import pub.devrel.easypermissions.AppSettingsDialog
+import pub.devrel.easypermissions.EasyPermissions
 import java.util.*
 
-class Permission : AppCompatActivity(),ActivityCompat.OnRequestPermissionsResultCallback {
+
+class Permission : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -19,10 +21,11 @@ class Permission : AppCompatActivity(),ActivityCompat.OnRequestPermissionsResult
 
         var button = findViewById<Button>(R.id.approve_permission_request)
         button.setOnClickListener {
-            ActivityCompat.requestPermissions(
+            EasyPermissions.requestPermissions(
                 this,
-                arrayOf(Manifest.permission.ACTIVITY_RECOGNITION),
-                88
+                getString(R.string.activity_rationale),
+                88,
+                Manifest.permission.ACTIVITY_RECOGNITION
             )
         }
     }
@@ -33,6 +36,7 @@ class Permission : AppCompatActivity(),ActivityCompat.OnRequestPermissionsResult
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this)
 
         val permissionResult = "Request code: " + requestCode.toString() + ", Permissions: " +
                 permissions.contentToString() + ", Results: " + grantResults.contentToString()
@@ -41,7 +45,20 @@ class Permission : AppCompatActivity(),ActivityCompat.OnRequestPermissionsResult
 
         if (requestCode == 88) {
             Log.d("requestCode", "OK")
-            finish()
+        }
+    }
+
+    override fun onPermissionsGranted(requestCode: Int, perms: MutableList<String>) {
+//        TODO("Not yet implemented")
+        Log.d("permission", "OK")
+        finish()
+    }
+
+    override fun onPermissionsDenied(requestCode: Int, perms: MutableList<String>) {
+//        TODO("Not yet implemented")
+        Log.d("permission", "no")
+        if (EasyPermissions.somePermissionPermanentlyDenied(this, perms)) {
+            AppSettingsDialog.Builder(this).build().show()
         }
     }
 

@@ -13,13 +13,19 @@ import android.util.Log
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import com.example.sensorapplication.db.LogTable
+import com.example.sensorapplication.db.Repository
+import com.example.sensorapplication.db.TrackViewModel
+import com.example.sensorapplication.db.TrackViewModelFactory
 import com.example.sensorapplication.service.MusicService
 import com.google.android.gms.location.*
 import java.text.DateFormat
 import java.text.SimpleDateFormat
+import java.time.LocalDateTime
 import java.util.*
 
 
@@ -33,44 +39,60 @@ class MainActivity : AppCompatActivity(){
     private var startTime: Long = 0
     private var endTime: Long = 0
     private lateinit var svc: Intent
+    private val trackViewModel: TrackViewModel by viewModels {
+        TrackViewModelFactory(Repository((application as SensorApplication).database.trackDao()))
+    }
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        Log.d("here", "here")
-        if(PackageManager.PERMISSION_GRANTED != ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACTIVITY_RECOGNITION)
-        ){
+        Log.d("MainActivity", "here")
+        client = ActivityRecognition.getClient(this)
+        if(!activityRecognitionPermissionApproved()){
             var intent = Intent(this, Permission::class.java)
             startActivity(intent)
         }
-        Log.d("check", "check")
+    }
 
-        image = findViewById(R.id.imageView)
-        activityDesc = findViewById(R.id.activityDesc)
-        encouragingMsg = findViewById(R.id.msg1)
-        buildTransitions()
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun activityRecognitionPermissionApproved(): Boolean {
 
-        svc = Intent(this, MusicService::class.java)
+        // TODO: Review permission check for 29+.
+        return PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACTIVITY_RECOGNITION)
+    }
 
-        val request = ActivityTransitionRequest(transitions)
+    @SuppressLint("MissingPermission")
+    @RequiresApi(Build.VERSION_CODES.Q)
+    override fun onResume() {
+        super.onResume()
 
-        client = ActivityRecognition.getClient(this)
-        client.requestActivityTransitionUpdates(request, getPendingIntent())
+            image = findViewById(R.id.imageView)
+            activityDesc = findViewById(R.id.activityDesc)
+            encouragingMsg = findViewById(R.id.msg1)
+            buildTransitions()
+
+            svc = Intent(this, MusicService::class.java)
+
+            val request = ActivityTransitionRequest(transitions)
+            Log.d("MainActivity", transitions.toString())
+
+        if (activityRecognitionPermissionApproved()) {
+            client.requestActivityTransitionUpdates(request, getPendingIntent())
                 .addOnSuccessListener {
-                    Log.d("success", "success")
+                    Log.d("MainActivity", "success")
                 }
                 .addOnFailureListener {
-                    Log.d("failed", "failed")
+                    Log.d("MainActivity", "failed")
                 }
-
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onStop() {
         super.onStop()
-        if(PackageManager.PERMISSION_GRANTED != ActivityCompat.checkSelfPermission(
+        if(PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACTIVITY_RECOGNITION)
         ){
@@ -82,14 +104,13 @@ class MainActivity : AppCompatActivity(){
                 }
         }
         Log.d("onStop", "cancel")
-
     }
 
 //https://developer.android.com/reference/android/app/PendingIntent#getBroadcast(android.content.Context,%20int,%20android.content.Intent,%20int)
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("UnspecifiedImmutableFlag")
     private fun getPendingIntent(): PendingIntent {
-    Log.d("MainActivity", "Broadcast")
+    Log.d("MainActivity", "PendingIntent")
         return PendingIntent.getBroadcast(this, 0,
             Intent(this, InfoReceiver::class.java),PendingIntent.FLAG_IMMUTABLE)
         }
@@ -131,6 +152,7 @@ class MainActivity : AppCompatActivity(){
     }
 
 
+    @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("SetTextI18n")
     private fun setActivity(activity: ActivityTransitionEvent){
         Log.d("MainActivity", "setActivity")
@@ -139,8 +161,10 @@ class MainActivity : AppCompatActivity(){
             val timeDiff = endTime - startTime
             val formatter: DateFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
             val text: String = formatter.format(Date(timeDiff))
-            val str = "You just did " + getActivity(activity) + " for " + text
+            val act: String = getActivity(activity)
+            val str = "You just did $act for $text"
             makeToast(str)
+            trackViewModel.insertTrack(LogTable(day = LocalDateTime.now().toString(), time = text, activity = act))
         }else{
             startTime = System.currentTimeMillis()
             getActivity(activity)
@@ -152,13 +176,10 @@ class MainActivity : AppCompatActivity(){
         encouragingMsg.text = ""
         when(activity.activityType){
             DetectedActivity.STILL -> {
-//                activityDesc.text =
                 if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER) image.setImageResource(R.drawable.still)
                 return "STILL"
             }
             DetectedActivity.WALKING -> {
-//                activityDesc.text = ""
-//                image.setImageResource(R.drawable.walking)
                 if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER){
                     image.setImageResource(R.drawable.walking)
                     encouragingMsg.text = "You are doing great!"
@@ -166,16 +187,11 @@ class MainActivity : AppCompatActivity(){
                 return "WALKING"
             }
             DetectedActivity.IN_VEHICLE -> {
-//                activityDesc.text = "IN_VEHICLE"
-//                image.setImageResource(R.drawable.driving)
                 if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER) image.setImageResource(R.drawable.driving)
                 return "IN_VEHICLE"
             }
             DetectedActivity.RUNNING -> {
-//                activityDesc.text = "RUNNING"
-//                image.setImageResource(R.drawable.running)
                     if(activity.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER){
-
                         startService(svc)
                         image.setImageResource(R.drawable.running)
                     }else{
@@ -190,8 +206,8 @@ class MainActivity : AppCompatActivity(){
     private fun makeToast(msg:String){
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
     }
-
     inner class InfoReceiver: BroadcastReceiver() {
+        @RequiresApi(Build.VERSION_CODES.O)
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d("MainActivity", "onReceive")
             if (ActivityTransitionResult.hasResult(intent)) {
