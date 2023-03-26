@@ -18,6 +18,6 @@ class TrackViewModelFactory(private val repository: Repository) : ViewModelProvi
             @Suppress("UNCHECKED_CAST")
             return TrackViewModel(repository) as T
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
+        throw IllegalArgumentException("Unknown model class")
     }
 }
