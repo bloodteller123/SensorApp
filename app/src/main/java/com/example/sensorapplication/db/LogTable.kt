@@ -12,8 +12,9 @@ data class LogTable(
     @ColumnInfo(name = "activityId")
     val activityId: Int = 0,
 
-    val day: String,
+    val date: String,
     val time: String,
+    val duration: String,
     @ColumnInfo(name = "activity")
     val activity: String
 )

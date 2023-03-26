@@ -24,7 +24,7 @@ import com.example.sensorapplication.media.MusicPlayer
 //import com.example.sensorapplication.media.MusicService
 import com.google.android.gms.location.*
 import java.lang.Math.abs
-import java.time.LocalDateTime
+import java.text.DateFormat
 import java.util.*
 import kotlin.math.sqrt
 
@@ -50,10 +50,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener{
     private var prevActivity = ""
     private var mAccel: Double = 0.0
     private lateinit var player: MusicPlayer
-    private val THRESHOLDWALKING = 2
+    private val THRESHOLDWALKING = 1
     private val THRESHOLDRUNNING = 5
-    private val THRESHOLDDRIVING = 10
-    private val INTERVAL = 188
+    private val THRESHOLDDRIVING = 15
+    private val INTERVAL = 150
     private var count = 0
     private var sum = 0.0
 
@@ -77,7 +77,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener{
         encouragingMsg = findViewById(R.id.msg1)
 
         mSensor = mSensorMgr.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
-//        this.deleteDatabase("appDatabase.db")
+        this.deleteDatabase("appDatabase.db")
     }
 
 //    @RequiresApi(Build.VERSION_CODES.Q)
@@ -120,17 +120,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener{
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onStop() {
         super.onStop()
-//        if(PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(
-//                this,
-//                Manifest.permission.ACTIVITY_RECOGNITION)
-//        ){
-//            Log.d("onStopClient", "cancel")
-//            client
-//                .removeActivityTransitionUpdates(getPendingIntent())
-//                .addOnSuccessListener {
-//                    getPendingIntent().cancel()
-//                }
-//        }
+
         mSensorMgr.unregisterListener(this)
         Log.d("onStop", "cancel")
     }
@@ -181,6 +171,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener{
 //            .build()
 //    }
 
+    @SuppressLint("SimpleDateFormat")
     @RequiresApi(Build.VERSION_CODES.O)
     private fun finishActivity(){
         if(currActivity != prevActivity){
@@ -188,14 +179,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener{
             val timeDiff = endTime - startTime
             Log.d("TimeDiff", timeDiff.toString())
 
-            val minutes: Long = timeDiff / 1000 / 60
+            var minutes: Long = timeDiff / 1000 / 60
+            if(minutes < 1) minutes = 0L
+
             val seconds = (timeDiff / 1000 % 60)
             val milseconds = (timeDiff / 1000 )
 
             val str = "You just did $prevActivity for $minutes minutes $seconds seconds"
             Log.d("String", str)
             makeToast(str)
-            trackViewModel.insertTrack(LogTable(day = LocalDateTime.now().toString(), time = "$minutes:$seconds", activity = prevActivity))
+//            val sdf = SimpleDateFormat("MMM dd,yyyy", )
+            val date = DateFormat.getDateInstance().format( startTime);
+            val time = DateFormat.getTimeInstance().format( startTime);
+
+            Log.d("TIME",time.toString())
+            Log.d("TIME",date.toString())
+            trackViewModel.insertTrack(LogTable(date = date.toString(), time = time.toString(), duration = "$minutes", activity = prevActivity))
         }else{
             Log.d("MainActivity", currActivity)
         }
@@ -234,14 +233,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener{
             val delta = abs(mAccelCurrent - mAccelPrevious)
 
             mAccel = mAccel * 0.9f + delta
+            // need some times to record what user is doing
             if(count < INTERVAL){
                 count++
                 sum += mAccel
             }
             else{
-                encouragingMsg.text = ""
+                // decide the threshold
                 sum /= INTERVAL
                 if (sum > THRESHOLDDRIVING) {
+                    encouragingMsg.text = ""
                     player.stop()
                     //when prev != curr which means it enters 'IN VEHICLE' from other activities
                     if(prevActivity != currActivity) {
@@ -257,6 +258,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener{
             } else if (sum < THRESHOLDDRIVING && sum > THRESHOLDRUNNING) {
                     //when prev != curr which means it enters 'RUNNING' from other activities
                     if(prevActivity != currActivity) {
+                        encouragingMsg.text = ""
                         startTime = System.currentTimeMillis()
                         image.setImageResource(R.drawable.running)
                         activityDesc.text = "RUNNING"
@@ -284,6 +286,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener{
                 player.stop()
                  //when prev != curr which means it enters 'STILL' from other activities
                 if(prevActivity != currActivity) {
+                    encouragingMsg.text = ""
                     startTime = System.currentTimeMillis()
                     image.setImageResource(R.drawable.still)
                     activityDesc.text = "STILL"

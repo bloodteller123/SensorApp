@@ -5,4 +5,5 @@
     <string name="continues">Continue</string>
     <string name="desc">Track activity changes by letting us read your phone\'s activity transitions.</string>
     <string name="activity_rationale">Track activity changes by letting us read your phone\'s activity transitions.</string>
+    <string name="welcome">Welcome</string>
 </resources>
